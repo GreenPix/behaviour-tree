@@ -1,0 +1,32 @@
+tree my_tree_test {
+        sequence {
+                print_word("Hello World with quoted strings!\nAnd with newlines! and even escaped
+                           \"quotes\""),
+                increment({variable_1:1}),
+                increment ( { another_variable : -3 ,
+                              variable_1 : -2 } ),
+                selector {
+                        inverter print_word("This will fail, it is in an inverter"),
+                        print_word ( " But it was inside a selector so the tree will continue " ),
+                },
+                evaluate_int({result:result,expression:[ -1 -2 + ]}),
+                evaluate_int ( { result : result , expression : [ result 6 * -9 / ] } ),
+        }
+}
+
+tree bad_stuff {
+        sequence {
+                increment ( { variable_name : {
+                                test : " Wrong format: in a hashmap "
+                                } } ),
+                increment ( { variable_name : wrong_format_not_a_number } ),
+        }
+}
+
+tree conditions {
+        priority {
+                increment ( { counter : 1 } ),
+                check_condition ( { exp1 : [ counter 2 * ] , exp2 : [ 10 ] , operator : "<=" } ),
+                always_running,
+        }
+}

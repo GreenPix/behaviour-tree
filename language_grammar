@@ -1,0 +1,20 @@
+keywords : tree sequence selector inverter
+
+decorator_nodes_keyword : inverter
+composite_nodes_keyword : sequence selector
+
+decorator_node_decl : decorator_node_keyword node_decl
+composite_node_decl : composite_node_keyword '{' (node_decl ',')* node_decl? '}'
+leaf_node_decl : ident [options]
+node_decl : decorator_node_decl | composite_node_decl | leaf_node_decl | '{' node_decl '}'
+
+options : '(' value ')'
+options_map : "{" [ entry_list ] "}"
+entry_list : entry [ "," entry_list ]
+entry : key ":" value
+value : ident | options_map | quoted_string | array
+array : "[" value_list "]"
+value_list : value [ value_list ]
+quoted_string : "\"" ... "\""
+
+tree_decl : tree ident '{' node_decl '}'

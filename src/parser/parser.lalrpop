@@ -1,0 +1,112 @@
+use parser::ast::{Tree,Node,Value,Operator};
+use parser::lexer::Token;
+use std::collections::HashMap;
+
+grammar;
+
+pub TreeCollection = Tree*;
+
+Tree: Tree = {
+    "tree" <i:Ident> "{" <n:Node> "}" => Tree{name: i, root: n},
+};
+
+Node = {
+    Decorator,
+    Composite,
+    Leaf,
+};
+
+Decorator: Node = {
+    "inverter" <Node> => Node::Inverter(Box::new(<>)),
+};
+
+Composite: Node = {
+    "sequence" <BracedNodeList> => Node::Sequence(<>),
+    "selector" <BracedNodeList> => Node::Selector(<>),
+    "priority" <BracedNodeList> => Node::Priority(<>),
+};
+
+BracedNodeList = {
+    "{" <Comma<Node>> "}"
+};
+
+
+Leaf: Node = {
+    <i:Ident> <op:("(" <Value> ")")?> => Node::Leaf(i,op),
+};
+
+Value: Value = {
+    "[" <Value*> "]" => Value::Array(<>),
+    "{" <Comma<Entry>> "}" => {
+        let mut hashmap = HashMap::new();
+        for (key, value) in <> {
+            hashmap.insert(key, value);
+        }
+        Value::Map(hashmap)
+    },
+    <Int> => Value::Integer(<>),
+    <Text> => Value::String(<>),
+    <Operator> => Value::Operator(<>),
+};
+
+Operator: Operator = {
+    "+" => Operator::Plus,
+    "-" => Operator::Minus,
+    "*" => Operator::Multiply,
+    "/" => Operator::Divide,
+};
+
+Text: String = {
+    Ident,
+    QuotedString,
+};
+
+Entry = {
+    <Ident> ":" <Value>,
+};
+
+// Comma-separated list with optional trailing comma
+// Taken from LALRPOP tutorial
+Comma<T>: Vec<T> = {
+    <v:(<T> ",")*> <e:T?> => match e {
+        None => v,
+        Some(e) => {
+            let mut v = v;
+            v.push(e);
+            v
+        }
+    }
+};
+
+extern {
+    type Location = ();
+    type Error = String;
+
+    enum Token {
+        Ident => Token::Ident(<String>),
+        QuotedString => Token::QuotedString(<String>),
+        Int => Token::Integer(<i64>),
+
+        "tree" => Token::Root,
+        "tree" => Token::Root,
+        "subtree" => Token::Subtree,
+        "selector" => Token::Selector,
+        "sequence" => Token::Sequence,
+        "inverter" => Token::Inverter,
+        "priority" => Token::Priority,
+        "{" => Token::LeftBracket,
+        "}" => Token::RightBracket,
+        "," => Token::Comma,
+        ":" => Token::Colon,
+        "(" => Token::LeftParenthesis,
+        ")" => Token::RightParenthesis,
+        "[" => Token::LeftArray,
+        "]" => Token::RightArray,
+        "+" => Token::Plus,
+        "-" => Token::Minus,
+        "*" => Token::Multiply,
+        "/" => Token::Divide,
+    }
+}
+
+// vim: ft=rust
