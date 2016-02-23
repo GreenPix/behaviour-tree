@@ -3,7 +3,6 @@ use std::fmt::{self,Debug,Formatter};
 use std::hash::{Hash,BuildHasher};
 use std::borrow::Borrow;
 
-use phf::{self,PhfHash};
 
 use tree::{LeafNode,Context,VisitResult,StoreKind};
 
@@ -33,14 +32,6 @@ where K: Hash + Eq,
     }
 }
 
-impl <K,V,Q: ?Sized> Gettable<Q,V> for phf::Map<K,V>
-where Q: Eq + PhfHash,
-      K: Borrow<Q> {
-    fn get(&self, k: &Q) -> Option<&V> {
-        self.get(k)
-    }
-}
-
 impl <T,Q: ?Sized,V> Gettable<Q,V> for [T]
 where T: Gettable<Q,V> {
     fn get(&self, k: &Q) -> Option<&V> {
@@ -54,10 +45,20 @@ where T: Gettable<Q,V> {
     }
 }
 
-impl <'a, T,Q: ?Sized,V> Gettable<Q,V> for &'a T
+impl <'a, T: ?Sized ,Q: ?Sized,V> Gettable<Q,V> for &'a T
 where T: Gettable<Q,V> {
     fn get(&self, k: &Q) -> Option<&V> {
         (*self).get(k)
+    }
+}
+
+impl Gettable<str,LeafNodeFactoryFactory> for (&'static str, LeafNodeFactoryFactory) {
+    fn get(&self, k: &str) -> Option<&LeafNodeFactoryFactory> {
+        if k == self.0 {
+            Some(&self.1)
+        } else {
+            None
+        }
     }
 }
 
@@ -80,13 +81,13 @@ pub enum Operator {
 }
 
 #[allow(trivial_casts)]
-pub static LEAVES_COLLECTION: phf::Map<&'static str, LeafNodeFactoryFactory> = phf_map! {
-    "print_word" => self::print_word as LeafNodeFactoryFactory,
-    "increment" => self::increment as LeafNodeFactoryFactory,
-    "always_running" => fake_nodes::always_running as LeafNodeFactoryFactory,
-    "evaluate_int" => expressions::evaluate_int_node as LeafNodeFactoryFactory,
-    "check_condition" => conditions::check_condition_node as LeafNodeFactoryFactory,
-};
+pub static LEAVES_COLLECTION: &'static [(&'static str, LeafNodeFactoryFactory)] = &[
+    ("print_word", self::print_word as LeafNodeFactoryFactory),
+    ("increment", self::increment as LeafNodeFactoryFactory),
+    ("always_running", fake_nodes::always_running as LeafNodeFactoryFactory),
+    ("evaluate_int", expressions::evaluate_int_node as LeafNodeFactoryFactory),
+    ("check_condition", conditions::check_condition_node as LeafNodeFactoryFactory),
+];
 
 impl Debug for LeafNodeFactory {
     fn fmt(&self, formatter: &mut Formatter) -> Result<(),fmt::Error> {
