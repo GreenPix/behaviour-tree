@@ -3,22 +3,43 @@ use std::fmt::{self,Debug,Formatter};
 use std::hash::{Hash,BuildHasher};
 use std::borrow::Borrow;
 
+use tree::{LeafNode,VisitResult,BehaviourTreeNode,Prototype};
+use tree::{LeafNodeFactory};
+use parser::FactoryProducer;
 
-use tree::{LeafNode,Context,VisitResult,StoreKind};
+//mod fake_nodes;
+//pub mod expressions;
+//mod conditions;
 
-pub type LeafNodeFactory = Box<Fn() -> LeafNode<'static>>;
-/// Type of the functions the user must provide
-///
-/// They are supposed to take options as parameter, and create an object used to instanciate leaf
-/// node for actual trees
-pub type LeafNodeFactoryFactory = fn(&Option<Value>) -> Result<LeafNodeFactory, String>;
+pub type StandardFactory<C> = Box<LeafNodeFactory<Output=Box<BehaviourTreeNode<C>>>>;
+pub trait LeafNodeFactoryFactory {
+    type Output;
+    fn create_factory(&self, options: &Option<Value>) -> Result<Self::Output,String>;
+}
 
-mod fake_nodes;
-pub mod expressions;
-mod conditions;
+impl <T,U> LeafNodeFactoryFactory for T
+where T: Fn(&Option<Value>) -> Result<U,String> {
+    type Output = U;
+    fn create_factory(&self, option: &Option<Value>) -> Result<Self::Output,String> {
+        self(option)
+    }
+}
+
+impl <C: 'static> FactoryProducer for LeavesCollection<C> {
+    type Factory = StandardFactory<C>;
+    fn generate_leaf(&self, name: &str, option: &Option<Value>) -> Result<Self::Factory,String> {
+        match self.inner.get(name) {
+            None => Err(format!("Could not find leaf with name {}", name)),
+            Some(fact_fact) => {
+                let fact = try!(fact_fact.create_factory(option));
+                Ok(fact) 
+            }
+        }
+    }
+}
 
 /// A trait to abstract an object that can be queried with a key and will return a value
-pub trait Gettable<K: ?Sized,V> {
+pub trait Gettable<K: ?Sized,V: ?Sized> {
     fn get(&self, k: &K) -> Option<&V>;
 }
 
@@ -52,12 +73,24 @@ where T: Gettable<Q,V> {
     }
 }
 
-impl Gettable<str,LeafNodeFactoryFactory> for (&'static str, LeafNodeFactoryFactory) {
-    fn get(&self, k: &str) -> Option<&LeafNodeFactoryFactory> {
-        if k == self.0 {
-            Some(&self.1)
-        } else {
-            None
+// XXX: Context stuff is unclear, we want to avoid useless string allocation/copy
+pub trait Context: Gettable<str,StoreKind> {
+    fn insert_value(&mut self, key: String, value: StoreKind);
+    fn set_value(&mut self, key: &str, value: StoreKind) -> Result<(),()>;
+}
+
+impl <S: BuildHasher> Context for HashMap<String,StoreKind,S> {
+    fn insert_value(&mut self, key: String, value: StoreKind) {
+        self.insert(key,value);
+    }
+
+    fn set_value(&mut self, key: &str, value: StoreKind) -> Result<(),()> {
+        match self.get_mut(key) {
+            Some(v) => {
+                *v = value;
+                Ok(())
+            }
+            None => Err(()),
         }
     }
 }
@@ -80,22 +113,19 @@ pub enum Operator {
     Divide,
 }
 
-#[allow(trivial_casts)]
-pub static LEAVES_COLLECTION: &'static [(&'static str, LeafNodeFactoryFactory)] = &[
-    ("print_word", self::print_word as LeafNodeFactoryFactory),
-    ("increment", self::increment as LeafNodeFactoryFactory),
-    ("always_running", fake_nodes::always_running as LeafNodeFactoryFactory),
-    ("evaluate_int", expressions::evaluate_int_node as LeafNodeFactoryFactory),
-    ("check_condition", conditions::check_condition_node as LeafNodeFactoryFactory),
-];
+#[derive(Debug,Clone)]
+pub struct PrintText {
+    pub text: String,
+}
 
-impl Debug for LeafNodeFactory {
-    fn fmt(&self, formatter: &mut Formatter) -> Result<(),fmt::Error> {
-        formatter.write_str("[leaf node factory]")
+impl <C> BehaviourTreeNode<C> for PrintText {
+    fn visit(&mut self, _context: &mut C) -> VisitResult {
+        println!("Message node: {}", self.text);
+        VisitResult::Success
     }
 }
 
-fn print_word(options: &Option<Value>) -> Result<LeafNodeFactory, String> {
+pub fn print_text<C: 'static>(options: &Option<Value>) -> Result<StandardFactory<C>, String> {
     let message_orig = match options {
         &Some(Value::String(ref message)) => message,
         other => return Err(format!("Expected message, found {:?}", other)),
@@ -103,51 +133,125 @@ fn print_word(options: &Option<Value>) -> Result<LeafNodeFactory, String> {
 
     let message = message_orig.replace("_"," ");
 
-    Ok(Box::new(move || {
-        let message = message.clone();
-        let closure = Box::new(move |_: &mut Context| {
-            println!("Message node: {}", message);
-            VisitResult::Success
-        });
-        LeafNode::new(closure)
-    }))
+    Ok(Box::new(Prototype::new(PrintText { text: message })))
 }
 
-fn increment(options: &Option<Value>) -> Result<LeafNodeFactory, String> {
+/*
+TODO: Finish this
+
+#[derive(Debug,Clone)]
+pub struct Increment {
+    pub variable: String,
+    pub value: i64,
+}
+
+impl <C: Context> BehaviourTreeNode<C> for Increment {
+    fn visit(&mut self, context: &mut C) -> VisitResult {
+        let current_value = match context.get(&self.variable) {
+            None => {
+                None
+            },
+            Some(&StoreKind::I64(variable)) => {
+                Some(variable)
+            },
+            Some(other) => {
+                println!("Expected integer variable for key {}, found {:?}", variable_name, other);
+                return VisitResult::Failure
+            }
+        };
+        match current_value {
+            Some(v) => {
+                match context.set_value(&self.variable, v + self.value) {
+                    Ok(_) => VisitResult::Success,
+                    Err(_) => {
+                        warning!("Context::set_value failed for variable {} after a successfull get", self.variable);
+                        VisitResult::Success,
+                    }
+                }
+            }
+            TODO
+            None => context.insert_value(self.variable.clone(), self.value),
+        }
+        VisitResult::Success
+    }
+}
+
+pub fn increment<C: Gettable<str,Value>>(options: &Option<Value>) -> Result<Box<LeafNodeFactory<C>>, String> {
     let options_map = match options {
         &Some(Value::Map(ref map)) => map,
         other => return Err(format!("Expected hashmap, found {:?}", other)),
     };
-    let list_key_values: Vec<(String,i64)> = options_map.iter().filter_map(|(key, value)| {
-        match *value {
-            Value::Integer(value) => Some((key.clone(),value)),
-            _ => {
-                println!("Warning: value was not an integer, ignoring entry {}", key);
-                None
-            }
+    let variable = match options_map.get("variable") {
+        None => return Err(format!("Increment: missing required \"variable\" field")),
+        Some(Value::String(ref name)) => name.clone(),
+        Some(other) => return Err(format!("Increment: expected string for field \"variable\", got {:?}", other)),
+    };
+    let value = match options_map.get("value") {
+        None => return Err(format!("Increment: missing required \"value\" field")),
+        Some(Value::Integer(value)) => value,
+        Some(other) => return Err(format!("Increment: expected integer for field \"value\", got {:?}", other)),
+    };
+    let increment = Increment {
+        variable: variable,
+        value: value,
+    };
+    Ok(Box::new(Prototype(increment)))
+}
+*/
+
+
+#[derive(Default)]
+pub struct LeavesCollection<C> {
+    inner: HashMap<String,Box<LeafNodeFactoryFactory<Output=StandardFactory<C>>>>,
+}
+
+impl <C> LeavesCollection<C> {
+    pub fn new() -> LeavesCollection<C> {
+        LeavesCollection {
+            inner: HashMap::new(),
         }
-    }).collect();
-    Ok(Box::new(move || {
-        let list_key_values = list_key_values.clone();
-        let closure = Box::new(move |context: &mut Context| {
-            for &(ref variable_name, ref value) in list_key_values.iter() {
-                match context.map.get_mut::<str>(variable_name.as_ref()) {
-                    None => {},
-                    Some(&mut StoreKind::I64(ref mut variable)) => {
-                        *variable = *variable + value;
-                        println!("Value of variable {} : {}",variable_name, *variable);
-                        return VisitResult::Success;
-                    },
-                    Some(other) => {
-                        println!("Expected integer variable for key {}, found {:?}", variable_name, other);
-                        return VisitResult::Failure
-                    }
-                }
-                context.map.insert(variable_name.clone(), StoreKind::I64(*value));
-                println!("Variable {} did not exist, and is now equal to {}",variable_name, value);
-            }
-            VisitResult::Success
-        });
-        LeafNode::new(closure)
-    }))
+    }
+
+    pub fn register_function(
+        &mut self,
+        key: String,
+        f: Box<LeafNodeFactoryFactory<Output=StandardFactory<C>>>,
+        ) {
+        self.inner.insert(key,f);
+    }
+}
+
+macro_rules! insert_all {
+    ($($name:expr => $fun:expr),*) => (
+        {
+            let mut collection = LeavesCollection::new();
+            $(
+            collection.inner.insert(
+                String::from($name),
+                Box::new($fun),
+                );
+            )*
+            collection
+        }
+        );
+    ($($name:expr => $fun:expr),+,) => (
+        insert_all!($($name => $fun),+)
+        );
+}
+impl <C: Context + 'static> LeavesCollection<C> {
+    pub fn standard() -> LeavesCollection<C> {
+        let collection = insert_all!(
+            "print_text" => print_text,
+            //"increment" => increment,
+
+            );
+
+        collection
+    }
+}
+
+#[derive(Debug)]
+pub enum StoreKind {
+    String(String),
+    I64(i64),
 }

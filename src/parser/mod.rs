@@ -1,4 +1,5 @@
-use standard::{Gettable,LeafNodeFactoryFactory};
+use standard::{Gettable,Value};
+use tree::LeafNodeFactory;
 use tree::factory::{TreeFactory,NodeFactory};
 use self::ast::Node;
 
@@ -8,11 +9,16 @@ mod lexer;
 
 pub use self::lexer::{Token,Tokenizer};
 
+pub trait FactoryProducer {
+    type Factory;
+    fn generate_leaf(&self, name: &str, option: &Option<Value>) -> Result<Self::Factory,String>;
+}
+
 pub fn parse<T: ?Sized>(
     input: &str,
     leaves: &T,
-    ) -> Result<Vec<TreeFactory>,String>
-where T: Gettable<str, LeafNodeFactoryFactory> {
+    ) -> Result<Vec<TreeFactory<T::Factory>>,String>
+where T: FactoryProducer {
     let tokenizer = Tokenizer::new(input);
     let tokenizer_mapped = tokenizer.map(|e| {
         e.map(|token| ((),token,()))
@@ -33,8 +39,8 @@ where T: Gettable<str, LeafNodeFactoryFactory> {
     Ok(new_trees)
 }
 
-fn resolve_dependencies<T: ?Sized>(node: Node, leaves: &T) -> Result<NodeFactory,String>
-where T: Gettable<str, LeafNodeFactoryFactory> {
+fn resolve_dependencies<T: ?Sized>(node: Node, leaves: &T) -> Result<NodeFactory<T::Factory>,String>
+where T: FactoryProducer {
     match node {
         Node::Sequence(children) => {
             let new_children = try!(resolve_dependencies_vec(children, leaves));
@@ -53,11 +59,10 @@ where T: Gettable<str, LeafNodeFactoryFactory> {
             Ok(NodeFactory::new_inverter(Box::new(new_child)))
         }
         Node::Leaf(name, options) => {
-            match leaves.get(&name) {
-                None => Err(format!("Could not find leaf node {}", name)),
-                Some(f) => {
-                    let new_leaf = try!(f(&options));
-                    Ok(NodeFactory::new_leaf(new_leaf))
+            match leaves.generate_leaf(&name, &options) {
+                Err(e) => Err(format!("Could not find leaf node {}: {}", name, e)),
+                Ok(f) => {
+                    Ok(NodeFactory::new_leaf(f))
                 }
             }
         }
@@ -65,8 +70,8 @@ where T: Gettable<str, LeafNodeFactoryFactory> {
 }
 
 fn resolve_dependencies_vec<T: ?Sized>(nodes: Vec<Node>, leaves: &T)
--> Result<Vec<NodeFactory>, String>
-where T: Gettable<str, LeafNodeFactoryFactory> {
+-> Result<Vec<NodeFactory<T::Factory>>, String>
+where T: FactoryProducer {
     let mut new_nodes = Vec::new();
     for node in nodes {
         let new_node = try!(resolve_dependencies(node, leaves));

@@ -4,40 +4,43 @@ use flat_tree::HasChildren;
 use tree::non_optimized::*;
 use super::OptimizedNode;
 use super::OptimizedTree;
-use standard::{LeafNodeFactory};
+use super::LeafNode;
+use super::{LeafNodeFactory};
 
 #[derive(Debug)]
-pub struct TreeFactory {
+pub struct TreeFactory<F> {
     name: String,
-    root: NodeFactory,
+    root: NodeFactory<F>,
 }
 
-fn optimize_inner(node: &NodeFactory) -> Option<OptimizedNode<'static>> {
+fn optimize_inner<F: LeafNodeFactory>(node: &NodeFactory<F>)
+-> Option<OptimizedNode<<F as LeafNodeFactory>::Output>> {
     let optimized = match *node {
-        NodeFactory::Leaf(ref leaf) => OptimizedNode::Leaf(leaf()),
+        NodeFactory::Leaf(ref leaf) => OptimizedNode::Leaf(LeafNode::new(leaf.instanciate())),
         NodeFactory::Sequence(_) => OptimizedNode::sequence(None),
         NodeFactory::Selector(_) => OptimizedNode::selector(None),
         NodeFactory::Inverter(_) => OptimizedNode::Inverter,
         NodeFactory::Priority(_) => OptimizedNode::Priority,
-        NodeFactory::Blackboard(ref node) => OptimizedNode::blackboard(node.key.clone()),
         NodeFactory::Subtree(_) => panic!("Subtrees are currently unsupported"),
     };
     Some(optimized)
 }
 
-impl TreeFactory {
-    pub fn new(root: NodeFactory, name: String) -> TreeFactory {
+impl <F> TreeFactory<F> {
+    pub fn new(root: NodeFactory<F>, name: String) -> TreeFactory<F> {
         TreeFactory {
             name: name,
             root: root,
         }
     }
 
-    pub fn instanciate(&self) -> Tree<'static> {
+    pub fn instanciate(&self) -> Tree<F::Output>
+    where F: LeafNodeFactory {
         Tree::new(self.root.instanciate())
     }
 
-    pub fn optimize(&self) -> OptimizedTree<'static> {
+    pub fn optimize(&self) -> OptimizedTree<F::Output>
+    where F: LeafNodeFactory {
         let tree = FlatTree::new(
             &self.root,
             0,
@@ -64,22 +67,23 @@ impl TreeFactory {
 /// 3. Open door
 /// 4. Walk through door
 #[derive(Debug)]
-pub struct SequenceNodeFactory {
-    children: Vec<NodeFactory>,
+pub struct SequenceNodeFactory<F> {
+    children: Vec<NodeFactory<F>>,
 }
 
-impl SequenceNodeFactory {
-    pub fn new(children: Vec<NodeFactory>) -> SequenceNodeFactory {
+impl <F> SequenceNodeFactory<F> {
+    pub fn new(children: Vec<NodeFactory<F>>) -> SequenceNodeFactory<F> {
         SequenceNodeFactory {
             children: children,
         }
     }
 
-    pub fn push(&mut self, node: NodeFactory) {
+    pub fn push(&mut self, node: NodeFactory<F>) {
         self.children.push(node);
     }
 
-    pub fn instanciate(&self) -> SequenceNode<'static> {
+    pub fn instanciate(&self) -> SequenceNode<F::Output>
+    where F: LeafNodeFactory {
         let children = self.children.iter().map(|child| child.instanciate()).collect();
         SequenceNode::new(children)
     }
@@ -91,22 +95,23 @@ impl SequenceNodeFactory {
 /// This is typically used when a set of actions have the same objective, but those actions are
 /// classified by preference.
 #[derive(Debug)]
-pub struct SelectorNodeFactory {
-    children: Vec<NodeFactory>,
+pub struct SelectorNodeFactory<F> {
+    children: Vec<NodeFactory<F>>,
 }
 
-impl SelectorNodeFactory {
-    pub fn new(children: Vec<NodeFactory>) -> SelectorNodeFactory {
+impl <F> SelectorNodeFactory<F> {
+    pub fn new(children: Vec<NodeFactory<F>>) -> SelectorNodeFactory<F> {
         SelectorNodeFactory {
             children: children,
         }
     }
 
-    pub fn push(&mut self, node: NodeFactory) {
+    pub fn push(&mut self, node: NodeFactory<F>) {
         self.children.push(node);
     }
 
-    pub fn instanciate(&self) -> SelectorNode<'static> {
+    pub fn instanciate(&self) -> SelectorNode<F::Output>
+    where F: LeafNodeFactory {
         let children = self.children.iter().map(|child| child.instanciate()).collect();
         SelectorNode::new(children)
     }
@@ -114,116 +119,99 @@ impl SelectorNodeFactory {
 
 /// Same as Sequence, but do not remember the last running child and revisit all children
 #[derive(Debug)]
-pub struct PriorityNodeFactory {
-    children: Vec<NodeFactory>,
+pub struct PriorityNodeFactory<F> {
+    children: Vec<NodeFactory<F>>,
 }
 
-impl PriorityNodeFactory {
-    pub fn new(children: Vec<NodeFactory>) -> PriorityNodeFactory {
+impl <F> PriorityNodeFactory<F> {
+    pub fn new(children: Vec<NodeFactory<F>>) -> PriorityNodeFactory<F> {
         PriorityNodeFactory{children: children}
     }
 
-    pub fn push(&mut self, node: NodeFactory) {
+    pub fn push(&mut self, node: NodeFactory<F>) {
         self.children.push(node);
     }
 
-    pub fn instanciate(&self) -> PriorityNode<'static> {
+    pub fn instanciate(&self) -> PriorityNode<F::Output>
+    where F: LeafNodeFactory {
         let children = self.children.iter().map(|child| child.instanciate()).collect();
         PriorityNode::new(children)
     }
 }
 
-/// Checks for the presence of a key in the context. Immediatly return failure if it doesn't.
-#[derive(Debug)]
-pub struct BlackboardNodeFactory {
-    child: Box<NodeFactory>,
-    key: String,
-}
-
-impl BlackboardNodeFactory {
-    pub fn new(child: Box<NodeFactory>, key: String) -> BlackboardNodeFactory {
-        BlackboardNodeFactory{child: child, key: key}
-    }
-
-    pub fn instanciate(&self) -> BlackboardNode<'static> {
-        unimplemented!();
-    }
-}
-
 /// Inverts the output of the child
 #[derive(Debug)]
-pub struct InverterNodeFactory {
-    child: Box<NodeFactory>,
+pub struct InverterNodeFactory<F> {
+    child: Box<NodeFactory<F>>,
 }
 
-impl InverterNodeFactory {
-    pub fn new(child: Box<NodeFactory>) -> InverterNodeFactory {
+impl <F> InverterNodeFactory<F> {
+    pub fn new(child: Box<NodeFactory<F>>) -> InverterNodeFactory<F> {
         InverterNodeFactory{child: child}
     }
 
-    pub fn instanciate(&self) -> InverterNode<'static> {
+    pub fn instanciate(&self) -> InverterNode<F::Output>
+    where F: LeafNodeFactory {
         let child = Box::new(self.child.instanciate());
         InverterNode::new(child)
     }
 }
 
 #[derive(Debug)]
-pub enum NodeFactory {
-    Leaf(LeafNodeFactory),
-    Sequence(SequenceNodeFactory),
-    Priority(PriorityNodeFactory),
-    Selector(SelectorNodeFactory),
-    Blackboard(BlackboardNodeFactory),
-    Inverter(InverterNodeFactory),
+pub enum NodeFactory<F> {
+    Leaf(F),
+    Sequence(SequenceNodeFactory<F>),
+    Priority(PriorityNodeFactory<F>),
+    Selector(SelectorNodeFactory<F>),
+    Inverter(InverterNodeFactory<F>),
     Subtree(String),
 }
 
-impl NodeFactory {
-    pub fn instanciate<'a>(&self) -> Node<'a> {
+impl <F> NodeFactory<F> {
+    pub fn instanciate(&self) -> Node<F::Output>
+    where F: LeafNodeFactory {
         match *self {
-            NodeFactory::Leaf(ref node_factory) => Node::Leaf(node_factory()),
+            NodeFactory::Leaf(ref node_factory) => Node::Leaf(LeafNode::new(node_factory.instanciate())),
             NodeFactory::Sequence(ref node) => Node::Sequence(node.instanciate()),
             NodeFactory::Priority(ref node) => Node::Priority(node.instanciate()),
             NodeFactory::Selector(ref node) => Node::Selector(node.instanciate()),
-            NodeFactory::Blackboard(ref node) => Node::Blackboard(node.instanciate()),
             NodeFactory::Inverter(ref node) => Node::Inverter(node.instanciate()),
             NodeFactory::Subtree(ref name) => panic!("Trying to instanciate an unlinked subtree {}", name),
         }
     }
 
-    pub fn new_leaf(factory: LeafNodeFactory) -> NodeFactory {
+    pub fn new_leaf(factory: F) -> NodeFactory<F> {
         NodeFactory::Leaf(factory)
     }
 
-    pub fn new_sequence(children: Vec<NodeFactory>) -> NodeFactory {
+    pub fn new_sequence(children: Vec<NodeFactory<F>>) -> NodeFactory<F> {
         NodeFactory::Sequence(SequenceNodeFactory::new(children))
     }
 
-    pub fn new_selector(children: Vec<NodeFactory>) -> NodeFactory {
+    pub fn new_selector(children: Vec<NodeFactory<F>>) -> NodeFactory<F> {
         NodeFactory::Selector(SelectorNodeFactory::new(children))
     }
 
-    pub fn new_priority(children: Vec<NodeFactory>) -> NodeFactory {
+    pub fn new_priority(children: Vec<NodeFactory<F>>) -> NodeFactory<F> {
         NodeFactory::Priority(PriorityNodeFactory::new(children))
     }
 
-    pub fn new_inverter(child: Box<NodeFactory>) -> NodeFactory {
+    pub fn new_inverter(child: Box<NodeFactory<F>>) -> NodeFactory<F> {
         NodeFactory::Inverter(InverterNodeFactory::new(child))
     }
 
-    pub fn new_subtree(name: String) -> NodeFactory {
+    pub fn new_subtree(name: String) -> NodeFactory<F> {
         NodeFactory::Subtree(name)
     }
 }
 
-impl HasChildren for NodeFactory {
-    fn get_children(&self) -> &[NodeFactory] {
+impl <F> HasChildren for NodeFactory<F> {
+    fn get_children(&self) -> &[NodeFactory<F>] {
         match *self {
             NodeFactory::Leaf(_) => &[],
             NodeFactory::Sequence(ref node) => &node.children,
             NodeFactory::Priority(ref node) => &node.children,
             NodeFactory::Selector(ref node) => &node.children,
-            NodeFactory::Blackboard(ref node) => ::ref_slice::ref_slice(&node.child),
             NodeFactory::Inverter(ref node) => ::ref_slice::ref_slice(&node.child),
             NodeFactory::Subtree(ref name) => panic!("Trying to instanciate an unlinked subtree {}", name),
         }
