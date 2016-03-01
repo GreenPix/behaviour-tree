@@ -1,5 +1,4 @@
-use standard::{Gettable,Value};
-use tree::LeafNodeFactory;
+use standard::{Value};
 use tree::factory::{TreeFactory,NodeFactory};
 use self::ast::Node;
 

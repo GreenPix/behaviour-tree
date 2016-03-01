@@ -77,10 +77,6 @@ where T: LeafNodeFactory {
         (**self).instanciate()
     }
 }
-fn test<C>(a: Box<BehaviourTreeNode<C>>) {
-    test2(a)
-}
-fn test2<C,T: BehaviourTreeNode<C>>(_: T) {}
 
 /// Carries an action of checks a condition
 ///

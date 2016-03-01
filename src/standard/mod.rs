@@ -1,9 +1,8 @@
 use std::collections::HashMap;
-use std::fmt::{self,Debug,Formatter};
 use std::hash::{Hash,BuildHasher};
 use std::borrow::Borrow;
 
-use tree::{LeafNode,VisitResult,BehaviourTreeNode,Prototype};
+use tree::{VisitResult,BehaviourTreeNode,Prototype};
 use tree::{LeafNodeFactory};
 use parser::FactoryProducer;
 
