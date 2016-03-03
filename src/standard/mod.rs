@@ -4,7 +4,7 @@ use std::borrow::Borrow;
 
 use tree::{VisitResult,BehaviourTreeNode,Prototype};
 use tree::{LeafNodeFactory};
-use parser::FactoryProducer;
+use parser::{Value,FactoryProducer};
 
 //mod fake_nodes;
 //pub mod expressions;
@@ -92,24 +92,6 @@ impl <S: BuildHasher> Context for HashMap<String,StoreKind,S> {
             None => Err(()),
         }
     }
-}
-
-#[derive(Debug,Clone)]
-pub enum Value {
-    String(String),
-    Map(HashMap<String,Value>),
-    Array(Vec<Value>),
-    Integer(i64),
-    Operator(Operator),
-    Unknown(char),
-}
-
-#[derive(Debug,Clone,Copy)]
-pub enum Operator {
-    Plus,
-    Minus,
-    Multiply,
-    Divide,
 }
 
 #[derive(Debug,Clone)]

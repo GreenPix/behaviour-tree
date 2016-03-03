@@ -1,4 +1,5 @@
-use standard::{Value};
+use std::collections::HashMap;
+
 use tree::factory::{TreeFactory,NodeFactory};
 use self::ast::Node;
 
@@ -7,6 +8,23 @@ mod ast;
 mod lexer;
 
 pub use self::lexer::{Token,Tokenizer};
+
+#[derive(Debug,Clone,Copy)]
+pub enum Operator {
+    Plus,
+    Minus,
+    Multiply,
+    Divide,
+}
+
+#[derive(Debug,Clone)]
+pub enum Value {
+    String(String),
+    Map(HashMap<String,Value>),
+    Array(Vec<Value>),
+    Integer(i64),
+    Operator(Operator),
+}
 
 pub trait FactoryProducer {
     type Factory;

@@ -7,7 +7,7 @@ use super::OptimizedTree;
 use super::LeafNode;
 use super::{LeafNodeFactory};
 
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub struct TreeFactory<F> {
     name: String,
     root: NodeFactory<F>,
@@ -66,7 +66,7 @@ impl <F> TreeFactory<F> {
 /// 2. Walk to door
 /// 3. Open door
 /// 4. Walk through door
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub struct SequenceNodeFactory<F> {
     children: Vec<NodeFactory<F>>,
 }
@@ -94,7 +94,7 @@ impl <F> SequenceNodeFactory<F> {
 ///
 /// This is typically used when a set of actions have the same objective, but those actions are
 /// classified by preference.
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub struct SelectorNodeFactory<F> {
     children: Vec<NodeFactory<F>>,
 }
@@ -118,7 +118,7 @@ impl <F> SelectorNodeFactory<F> {
 }
 
 /// Same as Sequence, but do not remember the last running child and revisit all children
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub struct PriorityNodeFactory<F> {
     children: Vec<NodeFactory<F>>,
 }
@@ -140,7 +140,7 @@ impl <F> PriorityNodeFactory<F> {
 }
 
 /// Inverts the output of the child
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub struct InverterNodeFactory<F> {
     child: Box<NodeFactory<F>>,
 }
@@ -157,7 +157,7 @@ impl <F> InverterNodeFactory<F> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub enum NodeFactory<F> {
     Leaf(F),
     Sequence(SequenceNodeFactory<F>),

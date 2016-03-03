@@ -1,4 +1,5 @@
-use parser::ast::{Tree,Node,Value,Operator};
+use parser::{Operator,Value};
+use parser::ast::{Tree,Node};
 use parser::lexer::Token;
 use std::collections::HashMap;
 

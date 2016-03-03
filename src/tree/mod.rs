@@ -81,7 +81,7 @@ where T: LeafNodeFactory {
 /// Carries an action of checks a condition
 ///
 /// Leaf nodes are the only nodes that actually do something in the game
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub struct LeafNode<A> {
     inner: A,
 }
