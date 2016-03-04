@@ -132,7 +132,7 @@ struct OptimizedSequenceNode {
 impl OptimizedSequenceNode {
     fn visit<A,C>(&mut self, context: &mut C, mut children: ChildrenMut<OptimizedNode<A>>) -> VisitResult
     where A: BehaviourTreeNode<C> {
-        let mut index = self.running.unwrap_or(0);
+        let mut index = self.running.take().unwrap_or(0);
         let mut children = children.children_mut();
 
         // Go the the last previous running node
@@ -164,7 +164,7 @@ struct OptimizedSelectorNode {
 impl OptimizedSelectorNode {
     fn visit<A,C>(&mut self, context: &mut C, mut children: ChildrenMut<OptimizedNode<A>>) -> VisitResult
     where A: BehaviourTreeNode<C> {
-        let mut index = self.running.unwrap_or(0);
+        let mut index = self.running.take().unwrap_or(0);
         let mut children = children.children_mut();
 
         // Go the the last previous running node
