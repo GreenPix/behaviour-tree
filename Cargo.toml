@@ -2,16 +2,16 @@
 
 name = "behaviour-tree"
 version = "0.0.1"
-authors = ["Vaelden <vaelden@vaelden.me.uk>"]
+authors = ["Vaelden <maugan.villatel@gmail.com>"]
 build = "build.rs"      # LALRPOP
 
 [dependencies]
-lalrpop-util = "0.10.0"
+lalrpop-util = "0.11"
 ref_slice = "1.0.0"
 flat-tree = { git = "https://github.com/GreenPix/flat-tree.git"}
 
 [build-dependencies]
-lalrpop = "0.10.0"
+lalrpop = "0.11"
 
 [[bin]]
 doc = false
